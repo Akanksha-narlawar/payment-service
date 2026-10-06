@@ -6,6 +6,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -37,19 +38,21 @@ pipeline {
                         error 'Multiple JAR files found. Deployment stopped.'
                     }
 
-                    env.ARTIFACT = jarFiles[0].path
+                    def artifact = jarFiles[0].path
 
-                    echo "Generated artifact: ${env.ARTIFACT}"
+                    echo "Generated artifact: ${artifact}"
 
                     archiveArtifacts(
-                        artifacts: env.ARTIFACT,
+                        artifacts: artifact,
                         fingerprint: true
                     )
 
                     stash(
                         name: 'deployment-artifact',
-                        includes: env.ARTIFACT
+                        includes: artifact
                     )
+
+                    env.ARTIFACT = artifact
                 }
             }
         }
@@ -94,6 +97,7 @@ pipeline {
     }
 
     post {
+
         always {
             junit(
                 testResults: 'target/surefire-reports/*.xml',
