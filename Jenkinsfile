@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-        ARTIFACT = ''
-    }
-
     stages {
 
         stage('Checkout') {
@@ -52,7 +48,8 @@ pipeline {
                         includes: artifact
                     )
 
-                    env.ARTIFACT = artifact
+                    // Save exact artifact path for later stages
+                    env.ARTIFACT_PATH = artifact
                 }
             }
         }
@@ -69,6 +66,8 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
+
+                    // Restore the exact artifact created by this build
                     unstash 'deployment-artifact'
 
                     withCredentials([
@@ -78,10 +77,11 @@ pipeline {
                             passwordVariable: 'DEPLOY_PASSWORD'
                         )
                     ]) {
-                        bat '''
+
+                        bat """
                             echo Deploying approved artifact...
-                            bash deploy.sh "%ARTIFACT%"
-                        '''
+                            "C:\\Program Files\\Git\\bin\\bash.exe" deploy.sh "${env.ARTIFACT_PATH}"
+                        """
                     }
                 }
             }
