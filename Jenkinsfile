@@ -1,29 +1,120 @@
-stage('Archive') {
-    steps {
-        script {
-            def jarFiles = findFiles(glob: 'target/*.jar')
+pipeline {
+    agent any
 
-            if (jarFiles.length == 0) {
-                error 'No JAR file was generated'
+    environment {
+        ARTIFACT = ''
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                bat 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                bat 'mvn test'
+            }
+        }
+
+        stage('Archive') {
+            steps {
+                script {
+                    def jarFiles = findFiles(glob: 'target/*.jar')
+
+                    if (jarFiles.length == 0) {
+                        error 'No JAR file was generated'
+                    }
+
+                    if (jarFiles.length > 1) {
+                        error 'Multiple JAR files found. Deployment stopped.'
+                    }
+
+                    env.ARTIFACT = jarFiles[0].path
+
+                    echo "Generated artifact: ${env.ARTIFACT}"
+
+                    archiveArtifacts(
+                        artifacts: env.ARTIFACT,
+                        fingerprint: true
+                    )
+
+                    stash(
+                        name: 'deployment-artifact',
+                        includes: env.ARTIFACT
+                    )
+                }
+            }
+        }
+
+        stage('Approval') {
+            when {
+                branch 'main'
             }
 
-            if (jarFiles.length > 1) {
-                error 'Multiple JAR files found'
+            steps {
+                input(
+                    message: 'Approve deployment to production?',
+                    ok: 'Deploy'
+                )
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                branch 'main'
             }
 
-            env.ARTIFACT = jarFiles[0].path
+            steps {
+                script {
+                    unstash 'deployment-artifact'
 
-            echo "Generated artifact: ${env.ARTIFACT}"
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'deployment-credentials',
+                            usernameVariable: 'DEPLOY_USER',
+                            passwordVariable: 'DEPLOY_PASSWORD'
+                        )
+                    ]) {
+                        bat '''
+                            echo Deploying approved artifact...
+                            bash deploy.sh "%ARTIFACT%"
+                        '''
+                    }
+                }
+            }
+        }
+    }
 
-            archiveArtifacts(
-                artifacts: env.ARTIFACT,
-                fingerprint: true
+    post {
+        always {
+            junit(
+                testResults: 'target/surefire-reports/*.xml',
+                allowEmptyResults: true
             )
 
-            stash(
-                name: 'deployment-artifact',
-                includes: env.ARTIFACT
-            )
+            echo 'Publishing test results and cleaning workspace...'
+
+            cleanWs()
+        }
+
+        success {
+            echo 'STATUS: Build and deployment completed successfully.'
+        }
+
+        failure {
+            echo 'STATUS: Pipeline failed. Deployment was not successful.'
+        }
+
+        aborted {
+            echo 'STATUS: Pipeline was aborted. Deployment was not completed.'
         }
     }
 }
