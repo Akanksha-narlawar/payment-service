@@ -58,10 +58,6 @@ pipeline {
         }
 
         stage('Approval') {
-            when {
-                branch 'main'
-            }
-
             steps {
                 input(
                     message: 'Approve deployment to production?',
@@ -71,10 +67,6 @@ pipeline {
         }
 
         stage('Deploy') {
-            when {
-                branch 'main'
-            }
-
             steps {
                 script {
                     unstash 'deployment-artifact'
